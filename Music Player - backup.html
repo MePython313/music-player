@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HyperPlayer X</title>
+<style>
+:root{
+--bg:#0b1020;--panel:rgba(255,255,255,.08);--txt:#fff;--accent:#6ea8ff;
+}
+*{box-sizing:border-box}
+body{
+margin:0;color:var(--txt);font-family:Inter,Segoe UI,sans-serif;
+background:linear-gradient(135deg,#0b1020,#16213e,#0f3460);
+height:100vh;overflow:hidden;
+}
+body::before{
+content:"";position:fixed;inset:0;
+backdrop-filter:blur(30px);
+}
+header{
+position:relative;z-index:1;
+display:flex;gap:10px;padding:12px;
+background:rgba(0,0,0,.2);
+backdrop-filter:blur(20px);
+}
+button,input{
+background:var(--panel);
+color:white;border:none;border-radius:14px;padding:10px 14px;
+}
+#main{
+position:relative;z-index:1;
+display:grid;grid-template-columns:350px 1fr;
+height:calc(100vh - 64px);
+}
+#sidebar,#content{
+background:rgba(255,255,255,.05);
+backdrop-filter:blur(20px);
+margin:10px;border-radius:24px;
+overflow:hidden;
+}
+#stats{
+display:grid;grid-template-columns:1fr 1fr;
+gap:10px;padding:15px;
+}
+.card{
+background:rgba(255,255,255,.07);
+padding:12px;border-radius:16px;
+}
+#songs{overflow:auto;height:100%}
+.song{
+padding:12px;border-bottom:1px solid rgba(255,255,255,.05);
+cursor:pointer;
+}
+.song:hover{background:rgba(255,255,255,.08)}
+.active{background:var(--accent)!important;color:black}
+#content{
+padding:20px;display:flex;flex-direction:column;gap:15px;
+}
+#hero{
+display:flex;justify-content:space-between;align-items:center;
+background:rgba(255,255,255,.07);
+padding:20px;border-radius:24px;
+}
+#cover{
+width:140px;height:140px;border-radius:24px;
+background:linear-gradient(45deg,var(--accent),white);
+box-shadow:0 0 40px var(--accent);
+}
+#visualizer{
+height:260px;width:100%;
+background:black;border-radius:20px;
+}
+#stars span{
+font-size:32px;cursor:pointer;color:#666;
+}
+audio{width:100%}
+#themeBtn{
+font-size:18px;font-weight:bold;
+}
+@media(max-width:768px){
+#main{grid-template-columns:1fr}
+#sidebar{max-height:40vh}
+}
+</style>
+</head>
+<body>
+
+<header>
+<button id="openBtn">📂 Library</button>
+<input id="search" placeholder="Search songs..." style="flex:1">
+<button id="themeBtn">🎨 Theme</button>
+</header>
+
+<div id="main">
+
+<div id="sidebar">
+<div id="stats">
+<div class="card">🎵 Songs<br><b id="totalFiles">0</b></div>
+<div class="card">💾 Size<br><b id="totalSize">0 MB</b></div>
+<div class="card">🔢 Track<br><b id="songNum">-</b></div>
+<div class="card">📦 File<br><b id="songSize">-</b></div>
+</div>
+<div id="songs"></div>
+</div>
+
+<div id="content">
+
+<div id="hero">
+<div>
+<h1 id="title">HyperPlayer X</h1>
+<div id="subtitle">Load a music folder</div>
+</div>
+<div id="cover"></div>
+</div>
+
+<canvas id="visualizer"></canvas>
+
+<div>
+<button id="prev">⏮</button>
+<button id="play">▶</button>
+<button id="next">⏭</button>
+<button id="shuffle">🔀</button>
+<button id="sortBtn">⇅ Sort</button>
+</div>
+
+<div id="stars">
+<span data-v="1">★</span>
+<span data-v="2">★</span>
+<span data-v="3">★</span>
+<span data-v="4">★</span>
+<span data-v="5">★</span>
+</div>
+
+<audio id="audio" controls></audio>
+
+</div>
+</div>
+
+<input hidden id="picker" type="file" webkitdirectory multiple>
+
+<script>
+const themes=[
+["#0b1020","#6ea8ff"],
+["#180016","#ff00ff"],
+["#00161a","#00e5ff"],
+["#1a1400","#ffb300"]
+];
+let themeIndex=+(localStorage.getItem("themeIndex")||0);
+applyTheme();
+function applyTheme(){
+document.documentElement.style.setProperty("--bg",themes[themeIndex][0]);
+document.documentElement.style.setProperty("--accent",themes[themeIndex][1]);
+document.body.style.background=
+`linear-gradient(135deg,${themes[themeIndex][0]},#16213e,${themes[themeIndex][1]})`;
+}
+themeBtn.onclick=()=>{
+themeIndex=(themeIndex+1)%themes.length;
+applyTheme();
+localStorage.setItem("themeIndex",themeIndex);
+};
+
+const picker=document.getElementById("picker");
+const songsDiv=document.getElementById("songs");
+const audio=document.getElementById("audio");
+
+let songs=[];
+let filtered=[];
+let current=-1;
+let sortMode=0;
+
+openBtn.onclick=()=>picker.click();
+
+picker.onchange=e=>{
+songs=[...e.target.files].filter(f=>/\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(f.name));
+filtered=[...songs];
+updateStats();
+render();
+if(filtered.length){
+    current = 0;
+    title.textContent = filtered[0].name;
+    subtitle.textContent = "Now Playing";
+    songNum.textContent = "1";
+    songSize.textContent = (filtered[0].size/1024/1024).toFixed(1)+" MB";
+}
+};
+
+function updateStats(){
+totalFiles.textContent=songs.length;
+let size=songs.reduce((a,b)=>a+b.size,0);
+totalSize.textContent=(size/1024/1024).toFixed(1)+" MB";
+}
+
+function render(){
+songsDiv.innerHTML="";
+filtered.forEach((s,i)=>{
+let d=document.createElement("div");
+d.className="song"+(i===current?" active":"");
+d.textContent=(i+1)+". "+s.name;
+d.onclick=()=>playSong(i);
+songsDiv.appendChild(d);
+});
+}
+
+async function playSong(i){
+    if(i < 0 || i >= filtered.length) return;
+    current = i;
+    const file = filtered[i];
+
+    if(!ctx) initAudioCtx();
+    if(ctx.state==="suspended") await ctx.resume();
+
+    audio.pause();
+    if(audio.src && audio.src.startsWith("blob:")) URL.revokeObjectURL(audio.src);
+    audio.removeAttribute("src");
+    audio.load();
+
+    const url = URL.createObjectURL(file);
+    audio.src = url;
+
+    title.textContent = file.name;
+    subtitle.textContent = "Now Playing";
+    songNum.textContent = (i+1);
+    songSize.textContent = (file.size/1024/1024).toFixed(1)+" MB";
+
+    try{
+        if(audio.readyState >= 2){
+            await audio.play();
+        } else {
+            await new Promise((resolve,reject)=>{
+                audio.onloadeddata = resolve;
+                audio.onerror = reject;
+            });
+            await audio.play();
+        }
+    } catch(err){
+        console.error(err);
+    }
+    loadRating();
+    render();
+}
+audio.onended=()=>{
+if(filtered.length)
+playSong((current+1)%filtered.length);
+};
+
+play.onclick=()=>audio.paused?audio.play():audio.pause();
+next.onclick=()=>playSong((current+1)%filtered.length);
+prev.onclick=()=>playSong((current-1+filtered.length)%filtered.length);
+shuffle.onclick=()=>playSong(Math.floor(Math.random()*filtered.length));
+
+sortBtn.onclick=()=>{
+sortMode=(sortMode+1)%3;
+if(sortMode===0) filtered.sort((a,b)=>a.name.localeCompare(b.name));
+if(sortMode===1) filtered.sort((a,b)=>b.size-a.size);
+if(sortMode===2) filtered.sort(()=>Math.random()-0.5);
+render();
+};
+
+search.oninput=()=>{
+let q=search.value.toLowerCase();
+filtered=songs.filter(x=>x.name.toLowerCase().includes(q));
+if(current>=0 && !filtered.some(s=>s===songs[current])){
+    current=-1;
+    title.textContent="HyperPlayer X";
+    subtitle.textContent="Load a music folder";
+    songNum.textContent="-";
+    songSize.textContent="-";
+}
+render();
+};
+
+const stars=[...document.querySelectorAll("#stars span")];
+
+function loadRating(){
+if(current<0)return;
+let r=+localStorage.getItem("rating_"+filtered[current].name)||0;
+stars.forEach((s,i)=>s.style.color=i<r?"gold":"#666");
+}
+
+stars.forEach(st=>{
+st.onclick=()=>{
+if(current<0)return;
+localStorage.setItem("rating_"+filtered[current].name,st.dataset.v);
+loadRating();
+};
+});
+
+let ctx, src, analyser;
+function initAudioCtx(){
+    if(ctx) return;
+    ctx=new(window.AudioContext||window.webkitAudioContext)();
+    src=ctx.createMediaElementSource(audio);
+    analyser=ctx.createAnalyser();
+    analyser.fftSize=256;
+    data=new Uint8Array(analyser.frequencyBinCount);
+    src.connect(analyser);
+    analyser.connect(ctx.destination);
+}
+
+const canvas=document.getElementById("visualizer");
+const c=canvas.getContext("2d");
+
+function resize(){
+canvas.width=canvas.clientWidth;
+canvas.height=canvas.clientHeight;
+}
+resize();window.onresize=resize;
+
+let data=new Uint8Array(128);
+
+(function draw(){
+requestAnimationFrame(draw);
+if(!analyser) return;
+analyser.getByteFrequencyData(data);
+c.clearRect(0,0,canvas.width,canvas.height);
+let w=canvas.width/data.length;
+for(let i=0;i<data.length;i++){
+let h=data[i]/255*canvas.height;
+c.fillStyle=`hsl(${i*4},100%,50%)`;
+c.fillRect(i*w,canvas.height-h,w-1,h);
+}
+})();
+</script>
+</body>
+</html>
