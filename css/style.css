@@ -64,7 +64,7 @@ header button:active{transform:scale(.97)}
 /* Main layout */
 #main{
   position:relative;z-index:1;
-  display:grid;grid-template-columns:340px 1fr;
+  display:grid;grid-template-columns:var(--sidebar-width,340px) auto 1fr;
   height:calc(100vh - 53px);
   gap:0;
 }
@@ -112,13 +112,30 @@ header button:active{transform:scale(.97)}
   background:var(--accent)!important;color:#000;font-weight:600;
 }
 
+/* Resizer */
+#resizer{
+  width:6px;cursor:col-resize;
+  background:transparent;
+  position:relative;z-index:3;
+  margin:10px 0;
+  transition:background .2s;
+  flex-shrink:0;
+}
+#resizer:hover,#resizer.active{background:var(--accent)}
+
 /* Content area */
 #content{
-  margin:10px;padding:20px;
+  margin:10px 10px 10px 0;padding:20px;
   background:var(--panel);
   backdrop-filter:blur(20px);
   -webkit-backdrop-filter:blur(20px);
   border-radius:var(--radius-lg);
+  display:flex;flex-direction:row;gap:14px;
+  overflow:hidden;
+}
+
+#content-left{
+  flex:1;min-width:0;
   display:flex;flex-direction:column;gap:14px;
   overflow-y:auto;
 }
@@ -149,8 +166,9 @@ header button:active{transform:scale(.97)}
 
 /* Visualizer */
 #visualizer{
-  height:220px;width:100%;border-radius:var(--radius-lg);
+  width:45%;min-width:200px;border-radius:var(--radius-lg);
   background:rgba(0,0,0,.2);
+  flex-shrink:0;align-self:stretch;
 }
 
 /* Controls */
@@ -206,6 +224,17 @@ header button:active{transform:scale(.97)}
   box-shadow:0 0 8px var(--accent);
   pointer-events:none;
 }
+
+#timeTooltip{
+  position:absolute;bottom:16px;
+  background:rgba(0,0,0,.85);
+  color:var(--txt);padding:2px 7px;
+  border-radius:6px;font-size:11px;
+  pointer-events:none;opacity:0;
+  white-space:nowrap;transform:translateX(-50%);
+  transition:opacity .15s;
+}
+#progressBar:hover #timeTooltip{opacity:1}
 
 /* Volume */
 #volumeContainer{
@@ -281,10 +310,12 @@ header button:active{transform:scale(.97)}
 @media(max-width:768px){
   #main{grid-template-columns:1fr;grid-template-rows:auto 1fr}
   #sidebar{max-height:45vh;margin:8px}
-  #content{margin:0 8px 8px;padding:14px}
+  #resizer{display:none}
+  #content{flex-direction:column;margin:0 8px 8px;padding:14px}
+  #content-left{overflow-y:visible}
+  #visualizer{width:100%;min-width:0;height:150px;align-self:auto}
   #cover{width:80px;height:80px}
   #title{font-size:20px}
-  #visualizer{height:150px}
   #volumeSlider{width:80px}
   header{padding:10px 12px}
   #search{max-width:none}

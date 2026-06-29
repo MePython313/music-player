@@ -18,6 +18,13 @@ const HyperPlayerStorage = {
   setVolume(value) {
     localStorage.setItem('hp_volume', Math.max(0, Math.min(1, value)).toString());
   },
+  getSidebarWidth() {
+    const w = parseInt(localStorage.getItem('hp_sidebar_w') || '340', 10);
+    return isNaN(w) ? 340 : Math.max(200, Math.min(600, w));
+  },
+  setSidebarWidth(w) {
+    localStorage.setItem('hp_sidebar_w', Math.max(200, Math.min(600, w)).toString());
+  },
 
   _dbPromise: null,
 

@@ -172,13 +172,24 @@ async function openFolder(){
 }
 
 async function restoreSavedFolder(){
-  if (!window.showDirectoryPicker) return;
+  if (!window.showDirectoryPicker) {
+    // No File System API — try the file input fallback
+    picker.click();
+    return;
+  }
   try {
     const dirHandle = await HyperPlayerStorage.loadDirHandle();
-    if (!dirHandle) return;
+    if (!dirHandle) {
+      // First visit — auto-prompt to select a folder
+      await openFolder();
+      return;
+    }
     const perm = await dirHandle.requestPermission({ mode: 'read' });
     if (perm !== 'granted') {
+      // Permission lost — re-prompt user to re-select their folder
+      showToast('Permission lost — please re-select your music folder');
       HyperPlayerStorage.clearDirHandle();
+      await openFolder();
       return;
     }
     subtitle.textContent = 'Restoring folder...';
@@ -188,6 +199,8 @@ async function restoreSavedFolder(){
   } catch (err) {
     console.error(err);
     HyperPlayerStorage.clearDirHandle();
+    // Fallback: re-prompt user to pick a folder
+    await openFolder();
   }
 }
 
@@ -263,16 +276,6 @@ search.addEventListener('input', () => {
   state.filtered = state.songs.filter(x => x.name.toLowerCase().includes(q));
   if (state.current >= 0 && !state.filtered.some(s => s === state.songs[state.current])) {
     state.current = -1;
-    title.textContent = 'HyperPlayer X';
-    subtitle.textContent = 'Load a music folder';
-    songNum.textContent = '-';
-    songSize.textContent = '-';
-    cover.classList.remove('playing');
-    curTime.textContent = '0:00';
-    totTime.textContent = '0:00';
-    progFill.style.width = '0%';
-    progThumb.style.left = '0%';
-    HyperPlayerPlayer.destroy();
   }
   render();
 });
@@ -301,6 +304,55 @@ function updateSeek(e){
   progFill.style.width = (pct * 100) + '%';
   progThumb.style.left = (pct * 100) + '%';
   HyperPlayerPlayer.seek(pct);
+}
+
+/* ── Progress bar hover tooltip ── */
+const timeTooltip = $('timeTooltip');
+
+progBar.addEventListener('mousemove', e => {
+  const rect = progBar.getBoundingClientRect();
+  const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  const dur = HyperPlayerPlayer.getDuration();
+  const t = dur * pct;
+  timeTooltip.textContent = fmtTime(t);
+  timeTooltip.style.left = (pct * 100) + '%';
+});
+
+progBar.addEventListener('mouseleave', () => {
+  timeTooltip.style.opacity = '';
+});
+
+/* ── Sidebar resizer ── */
+const resizer = $('resizer');
+let resizeStartX = 0;
+let resizeStartW = 0;
+
+function initSidebarWidth(){
+  const w = HyperPlayerStorage.getSidebarWidth();
+  document.documentElement.style.setProperty('--sidebar-width', w + 'px');
+}
+initSidebarWidth();
+
+resizer.addEventListener('mousedown', e => {
+  e.preventDefault();
+  resizeStartX = e.clientX;
+  resizeStartW = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width')) || 340;
+  resizer.classList.add('active');
+  document.addEventListener('mousemove', onResize);
+  document.addEventListener('mouseup', stopResize);
+});
+
+function onResize(e){
+  const w = Math.max(200, Math.min(600, resizeStartW + (e.clientX - resizeStartX)));
+  document.documentElement.style.setProperty('--sidebar-width', w + 'px');
+}
+
+function stopResize(){
+  resizer.classList.remove('active');
+  document.removeEventListener('mousemove', onResize);
+  document.removeEventListener('mouseup', stopResize);
+  const w = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-width'));
+  if (w) HyperPlayerStorage.setSidebarWidth(Math.round(w));
 }
 
 /* ── Volume ── */
@@ -345,9 +397,11 @@ stars.forEach(st => {
 });
 
 /* ── Visualizer mode ── */
+const modeLabels = { bars: 'Wave', wave: 'Circle', circle: 'Bars' };
+
 visMode.addEventListener('click', () => {
   HyperPlayerVisualizer.toggleMode();
-  visMode.textContent = HyperPlayerVisualizer.mode === 'bars' ? 'Wave' : 'Bars';
+  visMode.textContent = modeLabels[HyperPlayerVisualizer.mode];
 });
 
 /* ── Keyboard shortcuts ── */
